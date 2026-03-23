@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/taidge/chagle"
 readme = "README.md"
 build = "build.rs"
-include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
+include = ["src/**/*", "tests/**/*", "LICENSE", "README.md", "build.rs"]
 
 [features]
 default = [

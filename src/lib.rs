@@ -49,6 +49,7 @@ fn get_str_from_keypair_type(curve: KeypairType) -> &'static str {
 
 #[cfg(feature = "noise")]
 fn genkey(curve: Option<KeypairType>) -> Result<()> {
+    use base64::Engine;
     let curve = curve.unwrap_or(DEFAULT_CURVE);
     let builder = snowstorm::Builder::new(
         format!(
@@ -59,8 +60,8 @@ fn genkey(curve: Option<KeypairType>) -> Result<()> {
     );
     let keypair = builder.generate_keypair()?;
 
-    println!("Private Key:\n{}\n", base64::encode(keypair.private));
-    println!("Public Key:\n{}", base64::encode(keypair.public));
+    println!("Private Key:\n{}\n", base64::engine::general_purpose::STANDARD.encode(keypair.private));
+    println!("Public Key:\n{}", base64::engine::general_purpose::STANDARD.encode(keypair.public));
     Ok(())
 }
 

@@ -2,7 +2,7 @@ pub const HASH_WIDTH_IN_BYTES: usize = 32;
 
 use anyhow::{Context, Result, bail};
 use bytes::{Bytes, BytesMut};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -178,9 +178,7 @@ impl PacketLength {
     }
 }
 
-lazy_static! {
-    static ref PACKET_LEN: PacketLength = PacketLength::new();
-}
+static PACKET_LEN: LazyLock<PacketLength> = LazyLock::new(PacketLength::new);
 
 pub async fn read_hello<T: AsyncRead + AsyncWrite + Unpin>(conn: &mut T) -> Result<Hello> {
     let mut buf = vec![0u8; PACKET_LEN.hello];

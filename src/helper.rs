@@ -1,13 +1,14 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_http_proxy::{http_connect_tokio, http_connect_tokio_with_basic_auth};
-use backoff::{backoff::Backoff, Notify};
+use backoff::Notify;
+use backoff::backoff::Backoff;
 use socket2::{SockRef, TcpKeepalive};
-use std::{future::Future, net::SocketAddr, time::Duration};
+use std::future::Future;
+use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
-use tokio::{
-    net::{lookup_host, TcpStream, ToSocketAddrs, UdpSocket},
-    sync::broadcast,
-};
+use tokio::net::{TcpStream, ToSocketAddrs, UdpSocket, lookup_host};
+use tokio::sync::broadcast;
 use tracing::trace;
 use url::Url;
 
@@ -28,8 +29,7 @@ pub fn try_set_tcp_keepalive(
 
     trace!(
         "Set TCP keepalive {:?} {:?}",
-        keepalive_duration,
-        keepalive_interval
+        keepalive_duration, keepalive_interval
     );
 
     Ok(s.set_tcp_keepalive(&keepalive)?)
@@ -38,7 +38,7 @@ pub fn try_set_tcp_keepalive(
 #[allow(dead_code)]
 pub fn feature_not_compile(feature: &str) -> ! {
     panic!(
-        "The feature '{}' is not compiled in this binary. Please re-compile rathole",
+        "The feature '{}' is not compiled in this binary. Please re-compile chagle",
         feature
     )
 }
@@ -46,7 +46,7 @@ pub fn feature_not_compile(feature: &str) -> ! {
 #[allow(dead_code)]
 pub fn feature_neither_compile(feature1: &str, feature2: &str) -> ! {
     panic!(
-        "Neither of the feature '{}' or '{}' is compiled in this binary. Please re-compile rathole",
+        "Neither of the feature '{}' or '{}' is compiled in this binary. Please re-compile chagle",
         feature1, feature2
     )
 }
@@ -65,7 +65,6 @@ pub fn host_port_pair(s: &str) -> Result<(&str, u16)> {
 
 /// Create a UDP socket and connect to `addr`
 pub async fn udp_connect<A: ToSocketAddrs>(addr: A, prefer_ipv6: bool) -> Result<UdpSocket> {
-
     let (socket_addr, bind_addr);
 
     match prefer_ipv6 {
@@ -76,7 +75,7 @@ pub async fn udp_connect<A: ToSocketAddrs>(addr: A, prefer_ipv6: bool) -> Result
                 SocketAddr::V4(_) => "0.0.0.0:0",
                 SocketAddr::V6(_) => ":::0",
             };
-        },
+        }
         true => {
             let all_host_addresses: Vec<SocketAddr> = lookup_host(addr).await?.collect();
 
@@ -85,7 +84,7 @@ pub async fn udp_connect<A: ToSocketAddrs>(addr: A, prefer_ipv6: bool) -> Result
                 Some(socket_addr_ipv6) => {
                     socket_addr = *socket_addr_ipv6;
                     bind_addr = ":::0";
-                },
+                }
                 None => {
                     let socket_addr_ipv4 = all_host_addresses.iter().find(|x| x.is_ipv4());
                     match socket_addr_ipv4 {

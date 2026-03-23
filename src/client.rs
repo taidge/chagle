@@ -3,23 +3,23 @@ use crate::config_watcher::{ClientServiceChange, ConfigChange};
 use crate::helper::udp_connect;
 use crate::protocol::Hello::{self, *};
 use crate::protocol::{
-    self, read_ack, read_control_cmd, read_data_cmd, read_hello, Ack, Auth, ControlChannelCmd,
-    DataChannelCmd, UdpTraffic, CURRENT_PROTO_VERSION, HASH_WIDTH_IN_BYTES,
+    self, Ack, Auth, CURRENT_PROTO_VERSION, ControlChannelCmd, DataChannelCmd, HASH_WIDTH_IN_BYTES,
+    UdpTraffic, read_ack, read_control_cmd, read_data_cmd, read_hello,
 };
 use crate::transport::{AddrMaybeCached, SocketOpts, TcpTransport, Transport};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
+use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
 use backoff::future::retry_notify;
-use backoff::ExponentialBackoff;
 use bytes::{Bytes, BytesMut};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::{self, copy_bidirectional, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt, copy_bidirectional};
 use tokio::net::{TcpStream, UdpSocket};
-use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::sync::{RwLock, broadcast, mpsc, oneshot};
 use tokio::time::{self, Duration, Instant};
-use tracing::{debug, error, info, instrument, trace, warn, Instrument, Span};
+use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 #[cfg(feature = "noise")]
 use crate::transport::NoiseTransport;
@@ -28,7 +28,7 @@ use crate::transport::TlsTransport;
 #[cfg(any(feature = "websocket-native-tls", feature = "websocket-rustls"))]
 use crate::transport::WebsocketTransport;
 
-use crate::constants::{run_control_chan_backoff, UDP_BUFFER_SIZE, UDP_SENDQ_SIZE, UDP_TIMEOUT};
+use crate::constants::{UDP_BUFFER_SIZE, UDP_SENDQ_SIZE, UDP_TIMEOUT, run_control_chan_backoff};
 
 // The entrypoint of running a client
 pub async fn run_client(
@@ -74,13 +74,14 @@ pub async fn run_client(
             #[cfg(not(any(feature = "websocket-native-tls", feature = "websocket-rustls")))]
             crate::helper::feature_neither_compile("websocket-native-tls", "websocket-rustls")
         }
+        TransportType::Kcp => crate::helper::feature_not_compile("kcp"),
+        TransportType::Quic => crate::helper::feature_not_compile("quic"),
     }
 }
 
 type ServiceDigest = protocol::Digest;
 type Nonce = protocol::Digest;
 
-// Holds the state of a client
 struct Client<T: Transport> {
     config: ClientConfig,
     service_handles: HashMap<String, ControlChannelHandle>,
@@ -88,7 +89,6 @@ struct Client<T: Transport> {
 }
 
 impl<T: 'static + Transport> Client<T> {
-    // Create a Client from `[client]` config block
     async fn from(config: ClientConfig) -> Result<Client<T>> {
         let transport =
             Arc::new(T::new(&config.transport).with_context(|| "Failed to create the transport")?);
@@ -99,14 +99,39 @@ impl<T: 'static + Transport> Client<T> {
         })
     }
 
-    // The entrypoint of Client
     async fn run(
         &mut self,
         mut shutdown_rx: broadcast::Receiver<bool>,
         mut update_rx: mpsc::Receiver<ConfigChange>,
     ) -> Result<()> {
+        let start_filter = self.config.start.as_ref();
+
         for (name, config) in &self.config.services {
-            // Create a control channel for each service defined
+            // Skip disabled services
+            if !config.is_enabled() {
+                debug!("Service {} is disabled, skipping", name);
+                continue;
+            }
+
+            // Apply start filter
+            if let Some(start) = start_filter {
+                if !start.contains(name) {
+                    debug!("Service {} not in start list, skipping", name);
+                    continue;
+                }
+            }
+
+            // Skip visitor services (they don't create control channels)
+            if config.is_visitor() {
+                info!("Service {} is a visitor, starting visitor mode", name);
+                let _handle = VisitorHandle::new(
+                    (*config).clone(),
+                    self.config.remote_addr.clone(),
+                    self.transport.clone(),
+                );
+                continue;
+            }
+
             let handle = ControlChannelHandle::new(
                 (*config).clone(),
                 self.config.remote_addr.clone(),
@@ -148,6 +173,9 @@ impl<T: 'static + Transport> Client<T> {
         match e {
             ConfigChange::ClientChange(client_change) => match client_change {
                 ClientServiceChange::Add(cfg) => {
+                    if !cfg.is_enabled() {
+                        return;
+                    }
                     let name = cfg.name.clone();
                     let handle = ControlChannelHandle::new(
                         cfg,
@@ -177,14 +205,12 @@ struct RunDataChannelArgs<T: Transport> {
 async fn do_data_channel_handshake<T: Transport>(
     args: Arc<RunDataChannelArgs<T>>,
 ) -> Result<T::Stream> {
-    // Retry at least every 100ms, at most for 10 seconds
     let backoff = ExponentialBackoff {
         max_interval: Duration::from_millis(100),
         max_elapsed_time: Some(Duration::from_secs(10)),
         ..Default::default()
     };
 
-    // Connect to remote_addr
     let mut conn: T::Stream = retry_notify(
         backoff,
         || async {
@@ -202,7 +228,6 @@ async fn do_data_channel_handshake<T: Transport>(
 
     T::hint(&conn, args.socket_opts);
 
-    // Send nonce
     let v: &[u8; HASH_WIDTH_IN_BYTES] = args.session_key[..].try_into().unwrap();
     let hello = Hello::DataChannelHello(CURRENT_PROTO_VERSION, v.to_owned());
     conn.write_all(&bincode::serialize(&hello).unwrap()).await?;
@@ -212,28 +237,48 @@ async fn do_data_channel_handshake<T: Transport>(
 }
 
 async fn run_data_channel<T: Transport>(args: Arc<RunDataChannelArgs<T>>) -> Result<()> {
-    // Do the handshake
     let mut conn = do_data_channel_handshake(args.clone()).await?;
 
-    // Forward
     match read_data_cmd(&mut conn).await? {
         DataChannelCmd::StartForwardTcp => {
-            if args.service.service_type != ServiceType::Tcp {
-                bail!("Expect TCP traffic. Please check the configuration.")
+            if !matches!(
+                args.service.service_type,
+                ServiceType::Tcp
+                    | ServiceType::Http
+                    | ServiceType::Https
+                    | ServiceType::Tcpmux
+                    | ServiceType::Stcp
+            ) {
+                bail!(
+                    "Unexpected TCP forward for service type {:?}",
+                    args.service.service_type
+                )
             }
             run_data_channel_for_tcp::<T>(conn, &args.service.local_addr).await?;
         }
         DataChannelCmd::StartForwardUdp => {
-            if args.service.service_type != ServiceType::Udp {
-                bail!("Expect UDP traffic. Please check the configuration.")
+            if !matches!(
+                args.service.service_type,
+                ServiceType::Udp | ServiceType::Sudp
+            ) {
+                bail!(
+                    "Unexpected UDP forward for service type {:?}",
+                    args.service.service_type
+                )
             }
-            run_data_channel_for_udp::<T>(conn, &args.service.local_addr, args.service.prefer_ipv6).await?;
+            run_data_channel_for_udp::<T>(conn, &args.service.local_addr, args.service.prefer_ipv6)
+                .await?;
+        }
+        DataChannelCmd::StartForwardHttp => {
+            run_data_channel_for_tcp::<T>(conn, &args.service.local_addr).await?;
+        }
+        DataChannelCmd::StartForwardStcp => {
+            run_data_channel_for_tcp::<T>(conn, &args.service.local_addr).await?;
         }
     }
     Ok(())
 }
 
-// Simply copying back and forth for TCP
 #[instrument(skip(conn))]
 async fn run_data_channel_for_tcp<T: Transport>(
     mut conn: T::Stream,
@@ -248,26 +293,21 @@ async fn run_data_channel_for_tcp<T: Transport>(
     Ok(())
 }
 
-// Things get a little tricker when it gets to UDP because it's connection-less.
-// A UdpPortMap must be maintained for recent seen incoming address, giving them
-// each a local port, which is associated with a socket. So just the sender
-// to the socket will work fine for the map's value.
 type UdpPortMap = Arc<RwLock<HashMap<SocketAddr, mpsc::Sender<Bytes>>>>;
 
 #[instrument(skip(conn))]
-async fn run_data_channel_for_udp<T: Transport>(conn: T::Stream, local_addr: &str, prefer_ipv6: bool) -> Result<()> {
+async fn run_data_channel_for_udp<T: Transport>(
+    conn: T::Stream,
+    local_addr: &str,
+    prefer_ipv6: bool,
+) -> Result<()> {
     debug!("New data channel starts forwarding");
 
     let port_map: UdpPortMap = Arc::new(RwLock::new(HashMap::new()));
-
-    // The channel stores UdpTraffic that needs to be sent to the server
     let (outbound_tx, mut outbound_rx) = mpsc::channel::<UdpTraffic>(UDP_SENDQ_SIZE);
 
-    // FIXME: https://github.com/tokio-rs/tls/issues/40
-    // Maybe this is our concern
     let (mut rd, mut wr) = io::split(conn);
 
-    // Keep sending items from the outbound channel to the server
     tokio::spawn(async move {
         while let Some(t) = outbound_rx.recv().await {
             trace!("outbound {:?}", t);
@@ -283,7 +323,6 @@ async fn run_data_channel_for_udp<T: Transport>(conn: T::Stream, local_addr: &st
     });
 
     loop {
-        // Read a packet from the server
         let hdr_len = rd.read_u8().await?;
         let packet = UdpTraffic::read(&mut rd, hdr_len)
             .await
@@ -291,18 +330,7 @@ async fn run_data_channel_for_udp<T: Transport>(conn: T::Stream, local_addr: &st
         let m = port_map.read().await;
 
         if m.get(&packet.from).is_none() {
-            // This packet is from a address we don't see for a while,
-            // which is not in the UdpPortMap.
-            // So set up a mapping (and a forwarder) for it
-
-            // Drop the reader lock
             drop(m);
-
-            // Grab the writer lock
-            // This is the only thread that will try to grab the writer lock
-            // So no need to worry about some other thread has already set up
-            // the mapping between the gap of dropping the reader lock and
-            // grabbing the writer lock
             let mut m = port_map.write().await;
 
             match udp_connect(local_addr, prefer_ipv6).await {
@@ -323,7 +351,6 @@ async fn run_data_channel_for_udp<T: Transport>(conn: T::Stream, local_addr: &st
             }
         }
 
-        // Now there should be a udp forwarder that can receive the packet
         let m = port_map.read().await;
         if let Some(tx) = m.get(&packet.from) {
             let _ = tx.send(packet.data).await;
@@ -331,7 +358,6 @@ async fn run_data_channel_for_udp<T: Transport>(conn: T::Stream, local_addr: &st
     }
 }
 
-// Run a UdpSocket for the visitor `from`
 #[instrument(skip_all, fields(from))]
 async fn run_udp_forwarder(
     s: UdpSocket,
@@ -346,7 +372,6 @@ async fn run_udp_forwarder(
 
     loop {
         tokio::select! {
-            // Receive from the server
             data = inbound_rx.recv() => {
                 if let Some(data) = data {
                     s.send(&data).await?;
@@ -354,8 +379,6 @@ async fn run_udp_forwarder(
                     break;
                 }
             },
-
-            // Receive from the service
             val = s.recv(&mut buf) => {
                 let len = match val {
                     Ok(v) => v,
@@ -369,8 +392,6 @@ async fn run_udp_forwarder(
 
                 outbount_tx.send(t).await?;
             },
-
-            // No traffic for the duration of UDP_TIMEOUT, clean up the state
             _ = time::sleep(Duration::from_secs(UDP_TIMEOUT)) => {
                 break;
             }
@@ -384,18 +405,15 @@ async fn run_udp_forwarder(
     Ok(())
 }
 
-// Control channel, using T as the transport layer
 struct ControlChannel<T: Transport> {
-    digest: ServiceDigest,              // SHA256 of the service name
-    service: ClientServiceConfig,       // `[client.services.foo]` config block
-    shutdown_rx: oneshot::Receiver<u8>, // Receives the shutdown signal
-    remote_addr: String,                // `client.remote_addr`
-    transport: Arc<T>,                  // Wrapper around the transport layer
-    heartbeat_timeout: u64,             // Application layer heartbeat timeout in secs
+    digest: ServiceDigest,
+    service: ClientServiceConfig,
+    shutdown_rx: oneshot::Receiver<u8>,
+    remote_addr: String,
+    transport: Arc<T>,
+    heartbeat_timeout: u64,
 }
 
-// Handle of a control channel
-// Dropping it will also drop the actual control channel
 struct ControlChannelHandle {
     shutdown_tx: oneshot::Sender<u8>,
 }
@@ -413,7 +431,6 @@ impl<T: 'static + Transport> ControlChannel<T> {
             .with_context(|| format!("Failed to connect to {}", &self.remote_addr))?;
         T::hint(&conn, SocketOpts::for_control_channel());
 
-        // Send hello
         debug!("Sending hello");
         let hello_send =
             Hello::ControlChannelHello(CURRENT_PROTO_VERSION, self.digest[..].try_into().unwrap());
@@ -421,7 +438,6 @@ impl<T: 'static + Transport> ControlChannel<T> {
             .await?;
         conn.flush().await?;
 
-        // Read hello
         debug!("Reading hello");
         let nonce = match read_hello(&mut conn).await? {
             ControlChannelHello(_, d) => d,
@@ -430,7 +446,6 @@ impl<T: 'static + Transport> ControlChannel<T> {
             }
         };
 
-        // Send auth
         debug!("Sending auth");
         let mut concat = Vec::from(self.service.token.as_ref().unwrap().as_bytes());
         concat.extend_from_slice(&nonce);
@@ -440,7 +455,6 @@ impl<T: 'static + Transport> ControlChannel<T> {
         conn.write_all(&bincode::serialize(&auth).unwrap()).await?;
         conn.flush().await?;
 
-        // Read ack
         debug!("Reading ack");
         match read_ack(&mut conn).await? {
             Ack::Ok => {}
@@ -450,10 +464,8 @@ impl<T: 'static + Transport> ControlChannel<T> {
             }
         }
 
-        // Channel ready
         info!("Control channel established");
 
-        // Socket options for the data channel
         let socket_opts = SocketOpts::from_client_cfg(&self.service);
         let data_ch_args = Arc::new(RunDataChannelArgs {
             session_key,
@@ -532,7 +544,6 @@ impl ControlChannelHandle {
                     }
 
                     if start.elapsed() > Duration::from_secs(3) {
-                        // The client runs for at least 3 secs and then disconnects
                         retry_backoff.reset();
                     }
 
@@ -540,7 +551,6 @@ impl ControlChannelHandle {
                         error!("{:#}. Retry in {:?}...", err, duration);
                         time::sleep(duration).await;
                     } else {
-                        // Should never reach
                         panic!("{:#}. Break", err);
                     }
 
@@ -554,7 +564,131 @@ impl ControlChannelHandle {
     }
 
     fn shutdown(self) {
-        // A send failure shows that the actor has already shutdown.
         let _ = self.shutdown_tx.send(0u8);
     }
+}
+
+/// Handle for STCP/SUDP/XTCP visitor connections
+struct VisitorHandle {
+    _shutdown_tx: oneshot::Sender<u8>,
+}
+
+impl VisitorHandle {
+    fn new<T: 'static + Transport>(
+        service: ClientServiceConfig,
+        remote_addr: String,
+        transport: Arc<T>,
+    ) -> VisitorHandle {
+        let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
+        let service_name = service.name.clone();
+
+        tokio::spawn(async move {
+            info!("Starting visitor for {}", service_name);
+
+            // Visitors listen locally and forward to the remote STCP service
+            let bind_addr = service.bind_addr.as_deref().unwrap_or("127.0.0.1");
+            let bind_port = service.bind_port.unwrap_or(0);
+            let listen_addr = format!("{}:{}", bind_addr, bind_port);
+
+            let listener = match tokio::net::TcpListener::bind(&listen_addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    error!("Visitor failed to bind {}: {}", listen_addr, e);
+                    return;
+                }
+            };
+
+            info!("Visitor listening at {}", listen_addr);
+
+            let server_name = service.server_name.as_deref().unwrap_or(&service_name);
+            let secret_key = service.secret_key.as_ref().map(|k| k.to_string());
+
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        match result {
+                            Ok((mut local_conn, peer_addr)) => {
+                                debug!("Visitor connection from {}", peer_addr);
+
+                                let transport = transport.clone();
+                                let remote_addr = remote_addr.clone();
+                                let server_name = server_name.to_string();
+                                let secret_key = secret_key.clone();
+
+                                tokio::spawn(async move {
+                                    if let Err(e) = handle_visitor_connection::<T>(
+                                        &mut local_conn,
+                                        transport,
+                                        &remote_addr,
+                                        &server_name,
+                                        secret_key.as_deref(),
+                                    ).await {
+                                        warn!("Visitor connection error: {:#}", e);
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                error!("Visitor accept error: {}", e);
+                            }
+                        }
+                    }
+                    _ = &mut shutdown_rx => {
+                        break;
+                    }
+                }
+            }
+
+            info!("Visitor for {} shutdown", service_name);
+        });
+
+        VisitorHandle {
+            _shutdown_tx: shutdown_tx,
+        }
+    }
+}
+
+/// Handle a single visitor connection: authenticate with server and relay traffic
+async fn handle_visitor_connection<T: Transport>(
+    local_conn: &mut TcpStream,
+    transport: Arc<T>,
+    remote_addr: &str,
+    server_name: &str,
+    secret_key: Option<&str>,
+) -> Result<()> {
+    let mut remote = AddrMaybeCached::new(remote_addr);
+    remote.resolve().await?;
+
+    let mut conn = transport.connect(&remote).await?;
+
+    // Send VisitorHello
+    let digest = protocol::digest(server_name.as_bytes());
+    let hello = Hello::VisitorHello(CURRENT_PROTO_VERSION, digest);
+    conn.write_all(&bincode::serialize(&hello).unwrap()).await?;
+    conn.flush().await?;
+
+    // Read nonce from server
+    let nonce = match read_hello(&mut conn).await? {
+        ControlChannelHello(_, d) => d,
+        _ => bail!("Unexpected response from server"),
+    };
+
+    // Send auth with secret_key
+    let key = secret_key.ok_or_else(|| anyhow!("No secret_key configured for visitor"))?;
+    let mut concat = Vec::from(key.as_bytes());
+    concat.extend_from_slice(&nonce);
+    let auth_digest = protocol::digest(&concat);
+    let auth = Auth(auth_digest);
+    conn.write_all(&bincode::serialize(&auth).unwrap()).await?;
+    conn.flush().await?;
+
+    // Read ack
+    match read_ack(&mut conn).await? {
+        Ack::Ok => {}
+        v => bail!("Visitor authentication failed: {}", v),
+    }
+
+    // Relay traffic
+    let _ = copy_bidirectional(&mut conn, local_conn).await;
+
+    Ok(())
 }

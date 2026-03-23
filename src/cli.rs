@@ -65,4 +65,8 @@ pub struct Cli {
     /// The DH function to use is x25519
     #[clap(long, arg_enum, value_name = "CURVE")]
     pub genkey: Option<Option<KeypairType>>,
+
+    /// Verify the configuration file and exit
+    #[clap(long)]
+    pub verify: bool,
 }

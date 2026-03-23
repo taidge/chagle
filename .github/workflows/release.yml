@@ -19,66 +19,66 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            exe: rathole
+            exe: chagle
             cross: false
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            exe: rathole
+            exe: chagle
             cross: false
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: arm-unknown-linux-musleabi
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: arm-unknown-linux-musleabihf
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: mips-unknown-linux-gnu
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: mips-unknown-linux-musl
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: mipsel-unknown-linux-gnu
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: mipsel-unknown-linux-musl
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: mips64-unknown-linux-gnuabi64
-            exe: rathole
+            exe: chagle
             cross: true
           - os: ubuntu-latest
             target: mips64el-unknown-linux-gnuabi64
-            exe: rathole
+            exe: chagle
             cross: true
 
           - os: macos-latest
             target: x86_64-apple-darwin
-            exe: rathole
+            exe: chagle
             cross: false
           
           - os: macos-latest
             target: aarch64-apple-darwin
-            exe: rathole
+            exe: chagle
             cross: false
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            exe: rathole.exe
+            exe: chagle.exe
             cross: false
     steps:
       - uses: actions/checkout@v2
@@ -128,20 +128,20 @@ jobs:
           args: -q --best --lzma
       - uses: actions/upload-artifact@v4
         with:
-          name: rathole-${{ matrix.target }}
+          name: chagle-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.exe }}
       - name: Zip Release
         uses: TheDoctor0/zip-release@0.6.1
         with:
           type: zip
-          filename: rathole-${{ matrix.target }}.zip
+          filename: chagle-${{ matrix.target }}.zip
           directory: target/${{ matrix.target }}/release/
           path: ${{ matrix.exe }}
       - name: Publish
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: target/${{ matrix.target }}/release/rathole-${{ matrix.target }}.zip
+          files: target/${{ matrix.target }}/release/chagle-${{ matrix.target }}.zip
           generate_release_notes: true
           draft: true
   docker:
@@ -163,7 +163,7 @@ jobs:
         with:
           push: true
           platforms: linux/amd64, linux/arm64, linux/armhf, linux/armv7
-          tags: rapiz1/rathole:latest, rapiz1/rathole:${{ github.ref_name }}
+          tags: rapiz1/chagle:latest, rapiz1/chagle:${{ github.ref_name }}
   publish-crate:
     name: Publish to crates.io
     if: startsWith(github.ref, 'refs/tags/')

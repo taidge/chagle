@@ -1,23 +1,19 @@
-# rathole
+# chagle
 
-![rathole-logo](./docs/img/rathole-logo.png)
-
-[![GitHub stars](https://img.shields.io/github/stars/rapiz1/rathole)](https://github.com/rapiz1/rathole/stargazers)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/rapiz1/rathole)](https://github.com/rapiz1/rathole/releases)
-![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/rapiz1/rathole/rust.yml?branch=main)
-[![GitHub all releases](https://img.shields.io/github/downloads/rapiz1/rathole/total)](https://github.com/rapiz1/rathole/releases)
-[![Docker Pulls](https://img.shields.io/docker/pulls/rapiz1/rathole)](https://hub.docker.com/r/rapiz1/rathole)
-[![Join the chat at https://gitter.im/rapiz1/rathole](https://badges.gitter.im/rapiz1/rathole.svg)](https://gitter.im/rapiz1/rathole?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
+[![GitHub stars](https://img.shields.io/github/stars/rapiz1/chagle)](https://github.com/rapiz1/chagle/stargazers)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/rapiz1/chagle)](https://github.com/rapiz1/chagle/releases)
+![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/rapiz1/chagle/rust.yml?branch=main)
+[![GitHub all releases](https://img.shields.io/github/downloads/rapiz1/chagle/total)](https://github.com/rapiz1/chagle/releases)
+[![Docker Pulls](https://img.shields.io/docker/pulls/rapiz1/chagle)](https://hub.docker.com/r/rapiz1/chagle)
 [English](README.md) | [简体中文](README-zh.md)
 
 A secure, stable and high-performance reverse proxy for NAT traversal, written in Rust
 
-rathole, like [frp](https://github.com/fatedier/frp) and [ngrok](https://github.com/inconshreveable/ngrok), can help to expose the service on the device behind the NAT to the Internet, via a server with a public IP.
+chagle, like [frp](https://github.com/fatedier/frp) and [ngrok](https://github.com/inconshreveable/ngrok), can help to expose the service on the device behind the NAT to the Internet, via a server with a public IP.
 
 <!-- TOC -->
 
-- [rathole](#rathole)
+- [chagle](#chagle)
   - [Features](#features)
   - [Quickstart](#quickstart)
   - [Configuration](#configuration)
@@ -37,11 +33,11 @@ rathole, like [frp](https://github.com/fatedier/frp) and [ngrok](https://github.
 
 ## Quickstart
 
-A full-powered `rathole` can be obtained from the [release](https://github.com/rapiz1/rathole/releases) page. Or [build from source](docs/build-guide.md) **for other platforms and minimizing the binary**. A [Docker image](https://hub.docker.com/r/rapiz1/rathole) is also available.
+A full-powered `chagle` can be obtained from the [release](https://github.com/rapiz1/chagle/releases) page. Or [build from source](docs/build-guide.md) **for other platforms and minimizing the binary**. A [Docker image](https://hub.docker.com/r/rapiz1/chagle) is also available.
 
-The usage of `rathole` is very similar to frp. If you have experience with the latter, then the configuration is very easy for you. The only difference is that configuration of a service is split into the client side and the server side, and a token is mandatory.
+The usage of `chagle` is very similar to frp. If you have experience with the latter, then the configuration is very easy for you. The only difference is that configuration of a service is split into the client side and the server side, and a token is mandatory.
 
-To use `rathole`, you need a server with a public IP, and a device behind the NAT, where some services that need to be exposed to the Internet.
+To use `chagle`, you need a server with a public IP, and a device behind the NAT, where some services that need to be exposed to the Internet.
 
 Assuming you have a NAS at home behind the NAT, and want to expose its ssh service to the Internet:
 
@@ -52,7 +48,7 @@ Create `server.toml` with the following content and accommodate it to your needs
 ```toml
 # server.toml
 [server]
-bind_addr = "0.0.0.0:2333" # `2333` specifies the port that rathole listens for clients
+bind_addr = "0.0.0.0:2333" # `2333` specifies the port that chagle listens for clients
 
 [server.services.my_nas_ssh]
 token = "use_a_secret_that_only_you_know" # Token that is used to authenticate the client for the service. Change to an arbitrary value.
@@ -62,7 +58,7 @@ bind_addr = "0.0.0.0:5202" # `5202` specifies the port that exposes `my_nas_ssh`
 Then run:
 
 ```bash
-./rathole server.toml
+./chagle server.toml
 ```
 
 2. On the host which is behind the NAT (your NAS)
@@ -82,20 +78,20 @@ local_addr = "127.0.0.1:22" # The address of the service that needs to be forwar
 Then run:
 
 ```bash
-./rathole client.toml
+./chagle client.toml
 ```
 
 3. Now the client will try to connect to the server `myserver.com` on port `2333`, and any traffic to `myserver.com:5202` will be forwarded to the client's port `22`.
 
 So you can `ssh myserver.com:5202` to ssh to your NAS.
 
-To run `rathole` run as a background service on Linux, checkout the [systemd examples](./examples/systemd).
+To run `chagle` run as a background service on Linux, checkout the [systemd examples](./examples/systemd).
 
 ## Configuration
 
-`rathole` can automatically determine to run in the server mode or the client mode, according to the content of the configuration file, if only one of `[server]` and `[client]` block is present, like the example in [Quickstart](#quickstart).
+`chagle` can automatically determine to run in the server mode or the client mode, according to the content of the configuration file, if only one of `[server]` and `[client]` block is present, like the example in [Quickstart](#quickstart).
 
-But the `[client]` and `[server]` block can also be put in one file. Then on the server side, run `rathole --server config.toml` and on the client side, run `rathole --client config.toml` to explicitly tell `rathole` the running mode.
+But the `[client]` and `[server]` block can also be put in one file. Then on the server side, run `chagle --server config.toml` and on the client side, run `chagle --client config.toml` to explicitly tell `chagle` the running mode.
 
 Before heading to the full configuration specification, it's recommend to skim [the configuration examples](./examples) to get a feeling of the configuration format.
 
@@ -178,34 +174,29 @@ bind_addr = "0.0.0.1:8082"
 
 ### Logging
 
-`rathole`, like many other Rust programs, use environment variables to control the logging level. `info`, `warn`, `error`, `debug`, `trace` are available.
+`chagle`, like many other Rust programs, use environment variables to control the logging level. `info`, `warn`, `error`, `debug`, `trace` are available.
 
 ```shell
-RUST_LOG=error ./rathole config.toml
+RUST_LOG=error ./chagle config.toml
 ```
 
-will run `rathole` with only error level logging.
+will run `chagle` with only error level logging.
 
 If `RUST_LOG` is not present, the default logging level is `info`.
 
 ### Tuning
 
-From v0.4.7, rathole enables TCP_NODELAY by default, which should benefit the latency and interactive applications like rdp, Minecraft servers. However, it slightly decreases the bandwidth.
+From v0.4.7, chagle enables TCP_NODELAY by default, which should benefit the latency and interactive applications like rdp, Minecraft servers. However, it slightly decreases the bandwidth.
 
 If the bandwidth is more important, TCP_NODELAY can be opted out with `nodelay = false`.
 
 ## Benchmark
 
-rathole has similar latency to [frp](https://github.com/fatedier/frp), but can handle a more connections, provide larger bandwidth, with less memory usage.
+chagle has similar latency to [frp](https://github.com/fatedier/frp), but can handle a more connections, provide larger bandwidth, with less memory usage.
 
 For more details, see the separate page [Benchmark](./docs/benchmark.md).
 
-**However, don't take it from here that `rathole` can magically make your forwarded service faster several times than before.** The benchmark is done on local loopback, indicating the performance when the task is cpu-bounded. One can gain quite a improvement if the network is not the bottleneck. Unfortunately, that's not true for many users. In that case, the main benefit is lower resource consumption, while the bandwidth and the latency may not improved significantly.
-
-![http_throughput](./docs/img/http_throughput.svg)
-![tcp_bitrate](./docs/img/tcp_bitrate.svg)
-![udp_bitrate](./docs/img/udp_bitrate.svg)
-![mem](./docs/img/mem-graph.png)
+**However, don't take it from here that `chagle` can magically make your forwarded service faster several times than before.** The benchmark is done on local loopback, indicating the performance when the task is cpu-bounded. One can gain quite a improvement if the network is not the bottleneck. Unfortunately, that's not true for many users. In that case, the main benefit is lower resource consumption, while the bandwidth and the latency may not improved significantly.
 
 ## Planning
 

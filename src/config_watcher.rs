@@ -1,13 +1,9 @@
-use crate::{
-    config::{ClientConfig, ClientServiceConfig, ServerConfig, ServerServiceConfig},
-    Config,
-};
+use crate::Config;
+use crate::config::{ClientConfig, ClientServiceConfig, ServerConfig, ServerServiceConfig};
 use anyhow::{Context, Result};
-use std::{
-    collections::HashMap,
-    env,
-    path::{Path, PathBuf},
-};
+use std::collections::HashMap;
+use std::env;
+use std::path::{Path, PathBuf};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, instrument};
 

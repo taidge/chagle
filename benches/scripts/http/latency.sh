@@ -14,10 +14,10 @@ for rate in $RATE; do
         vegeta report $name
 done
 
-echo warming up rathole
+echo warming up chagle
 echo GET $RATHOLE | vegeta attack -duration 10s > /dev/null
 for rate in $RATE; do
-        name="rathole-${rate}qps-$DURATION.bin"
+        name="chagle-${rate}qps-$DURATION.bin"
         echo $name
         echo GET $RATHOLE | vegeta attack -rate $rate -duration $DURATION > $name
         vegeta report $name

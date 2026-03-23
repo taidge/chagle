@@ -1,39 +1,37 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use tokio::{
-    io::{self, AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream, ToSocketAddrs},
-    sync::broadcast,
-};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::sync::broadcast;
 
 pub const PING: &str = "ping";
 pub const PONG: &str = "pong";
 
-pub async fn run_rathole_server(
+pub async fn run_chagle_server(
     config_path: &str,
     shutdown_rx: broadcast::Receiver<bool>,
 ) -> Result<()> {
-    let cli = rathole::Cli {
+    let cli = chagle::Cli {
         config_path: Some(PathBuf::from(config_path)),
         server: true,
         client: false,
         ..Default::default()
     };
-    rathole::run(cli, shutdown_rx).await
+    chagle::run(cli, shutdown_rx).await
 }
 
-pub async fn run_rathole_client(
+pub async fn run_chagle_client(
     config_path: &str,
     shutdown_rx: broadcast::Receiver<bool>,
 ) -> Result<()> {
-    let cli = rathole::Cli {
+    let cli = chagle::Cli {
         config_path: Some(PathBuf::from(config_path)),
         server: false,
         client: true,
         ..Default::default()
     };
-    rathole::run(cli, shutdown_rx).await
+    chagle::run(cli, shutdown_rx).await
 }
 
 pub mod tcp {
@@ -81,7 +79,7 @@ pub mod tcp {
 }
 
 pub mod udp {
-    use rathole::UDP_BUFFER_SIZE;
+    use chagle::UDP_BUFFER_SIZE;
     use tokio::net::UdpSocket;
     use tracing::debug;
 

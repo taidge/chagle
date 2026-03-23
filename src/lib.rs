@@ -7,6 +7,16 @@ mod multi_map;
 mod protocol;
 mod transport;
 
+// New modules
+mod bandwidth;
+mod dashboard;
+mod health_check;
+mod http_proxy;
+mod load_balance;
+mod metrics;
+mod plugin;
+mod proxy_protocol;
+
 pub use cli::Cli;
 use cli::KeypairType;
 pub use config::Config;
@@ -55,13 +65,51 @@ fn genkey(curve: Option<KeypairType>) -> Result<()> {
 }
 
 #[cfg(not(feature = "noise"))]
-fn genkey(curve: Option<KeypairType>) -> Result<()> {
-    crate::helper::feature_not_compile("nosie")
+fn genkey(_curve: Option<KeypairType>) -> Result<()> {
+    crate::helper::feature_not_compile("noise")
+}
+
+/// Verify a configuration file without running
+pub async fn verify_config(args: &Cli) -> Result<()> {
+    let config_path = args
+        .config_path
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No config path provided"))?;
+    let config = Config::from_file(config_path).await?;
+    println!("Configuration is valid.");
+    if config.server.is_some() {
+        println!("  Mode: server");
+        if let Some(server) = &config.server {
+            println!("  Bind: {}", server.bind_addr);
+            println!("  Services: {}", server.services.len());
+            for (name, svc) in &server.services {
+                println!("    - {} ({:?})", name, svc.service_type);
+            }
+        }
+    }
+    if config.client.is_some() {
+        println!("  Mode: client");
+        if let Some(client) = &config.client {
+            println!("  Remote: {}", client.remote_addr);
+            println!("  Services: {}", client.services.len());
+            for (name, svc) in &client.services {
+                println!(
+                    "    - {} ({:?} -> {})",
+                    name, svc.service_type, svc.local_addr
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 pub async fn run(args: Cli, shutdown_rx: broadcast::Receiver<bool>) -> Result<()> {
     if args.genkey.is_some() {
         return genkey(args.genkey.unwrap());
+    }
+
+    if args.verify {
+        return verify_config(&args).await;
     }
 
     // Raise `nofile` limit on linux and mac
@@ -167,8 +215,8 @@ mod tests {
 
     #[test]
     fn test_determine_run_mode() {
-        use config::*;
         use RunMode::*;
+        use config::*;
 
         struct T {
             cfg_s: bool,

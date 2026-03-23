@@ -1,7 +1,5 @@
-use crate::{
-    config::{TcpConfig, TransportConfig},
-    helper::tcp_connect_with_proxy,
-};
+use crate::config::{TcpConfig, TransportConfig};
+use crate::helper::tcp_connect_with_proxy;
 
 use super::{AddrMaybeCached, SocketOpts, Transport};
 use anyhow::Result;

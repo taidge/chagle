@@ -1,6 +1,6 @@
 pub const HASH_WIDTH_IN_BYTES: usize = 32;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,7 @@ pub type Digest = [u8; HASH_WIDTH_IN_BYTES];
 pub enum Hello {
     ControlChannelHello(ProtocolVersion, Digest), // sha256sum(service name) or a nonce
     DataChannelHello(ProtocolVersion, Digest),    // token provided by CreateDataChannel
+    VisitorHello(ProtocolVersion, Digest),        // visitor connecting to a secret service
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -30,6 +31,8 @@ pub enum Ack {
     Ok,
     ServiceNotExist,
     AuthFailed,
+    SecretKeyMismatch,
+    ServiceNotReady,
 }
 
 impl std::fmt::Display for Ack {
@@ -41,6 +44,8 @@ impl std::fmt::Display for Ack {
                 Ack::Ok => "Ok",
                 Ack::ServiceNotExist => "Service not exist",
                 Ack::AuthFailed => "Incorrect token",
+                Ack::SecretKeyMismatch => "Secret key mismatch",
+                Ack::ServiceNotReady => "Service not ready",
             }
         )
     }
@@ -56,6 +61,8 @@ pub enum ControlChannelCmd {
 pub enum DataChannelCmd {
     StartForwardTcp,
     StartForwardUdp,
+    StartForwardHttp,
+    StartForwardStcp,
 }
 
 type UdpPacketLen = u16; // `u16` should be enough for any practical UDP traffic on the Internet
@@ -186,7 +193,7 @@ pub async fn read_hello<T: AsyncRead + AsyncWrite + Unpin>(conn: &mut T) -> Resu
         Hello::ControlChannelHello(v, _) => {
             if v != CURRENT_PROTO_VERSION {
                 bail!(
-                    "Protocol version mismatched. Expected {}, got {}. Please update `rathole`.",
+                    "Protocol version mismatched. Expected {}, got {}. Please update `chagle`.",
                     CURRENT_PROTO_VERSION,
                     v
                 );
@@ -195,7 +202,16 @@ pub async fn read_hello<T: AsyncRead + AsyncWrite + Unpin>(conn: &mut T) -> Resu
         Hello::DataChannelHello(v, _) => {
             if v != CURRENT_PROTO_VERSION {
                 bail!(
-                    "Protocol version mismatched. Expected {}, got {}. Please update `rathole`.",
+                    "Protocol version mismatched. Expected {}, got {}. Please update `chagle`.",
+                    CURRENT_PROTO_VERSION,
+                    v
+                );
+            }
+        }
+        Hello::VisitorHello(v, _) => {
+            if v != CURRENT_PROTO_VERSION {
+                bail!(
+                    "Protocol version mismatched. Expected {}, got {}. Please update `chagle`.",
                     CURRENT_PROTO_VERSION,
                     v
                 );

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vergen::{vergen, Config, SemverKind};
+use vergen::{Config, SemverKind, vergen};
 
 fn main() -> Result<()> {
     let mut config = Config::default();

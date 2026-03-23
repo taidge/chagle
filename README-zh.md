@@ -1,10 +1,6 @@
 # chagle
 
-[![GitHub stars](https://img.shields.io/github/stars/rapiz1/chagle)](https://github.com/rapiz1/chagle/stargazers)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/rapiz1/chagle)](https://github.com/rapiz1/chagle/releases)
-![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/rapiz1/chagle/rust.yml?branch=main)
-[![GitHub all releases](https://img.shields.io/github/downloads/rapiz1/chagle/total)](https://github.com/rapiz1/chagle/releases)
-[![Docker Pulls](https://img.shields.io/docker/pulls/rapiz1/chagle)](https://hub.docker.com/r/rapiz1/chagle)
+> 基于 [rathole](https://github.com/rathole-org/rathole) 的 AI 维护版本，扩展了 HTTP/HTTPS 虚拟主机代理、秘密代理、健康检查、负载均衡、Dashboard、插件系统等功能。
 
 [English](README.md) | [简体中文](README-zh.md)
 
@@ -21,7 +17,6 @@ chagle，类似于 [frp](https://github.com/fatedier/frp) 和 [ngrok](https://gi
     - [Logging](#logging)
     - [Tuning](#tuning)
   - [Benchmark](#benchmark)
-  - [Development Status](#development-status)
 
 <!-- /TOC -->
 
@@ -30,7 +25,15 @@ chagle，类似于 [frp](https://github.com/fatedier/frp) 和 [ngrok](https://gi
 - **高性能** 具有更高的吞吐量，高并发下更稳定。见[Benchmark](#benchmark)
 - **低资源消耗** 内存占用远低于同类工具。见[Benchmark](#benchmark)。[二进制文件最小](docs/build-guide.md)可以到 **~500KiB**，可以部署在嵌入式设备如路由器上。
 - **安全性** 每个服务单独强制鉴权。Server 和 Client 负责各自的配置。使用 Noise Protocol 可以简单地配置传输加密，而不需要自签证书。同时也支持 TLS。
-- **热重载** 支持配置文件热重载，动态修改端口转发服务。HTTP API 正在开发中。
+- **热重载** 支持配置文件热重载，动态修改端口转发服务。
+- **HTTP/HTTPS 虚拟主机** 按域名、子域名、URL 路径路由 HTTP 请求。支持 Host 头重写、X-Forwarded-For 注入和 HTTP Basic 认证。
+- **秘密代理 (STCP/SUDP/XTCP)** 基于秘密密钥认证的私有服务访问和访客连接。
+- **健康检查与负载均衡** TCP 和 HTTP 健康检查，可配置间隔。基于组的轮询负载均衡。
+- **Dashboard 与监控** 内置 Web Dashboard、REST API (`/api/status`) 和 Prometheus 指标导出 (`/metrics`)。
+- **插件系统** 客户端插件（http_proxy、socks5、static_file、http2https、https2http、tls2raw、unix_domain_socket）和服务端 HTTP RPC 插件。
+- **带宽限制** 基于令牌桶的按代理带宽限制。
+- **Proxy Protocol** 支持 v1 和 v2，传递真实客户端 IP 到后端服务。
+- **多配置格式** 支持 TOML、YAML 和 JSON 配置文件。
 
 ## Quickstart
 
@@ -199,14 +202,5 @@ chagle 的延迟与 [frp](https://github.com/fatedier/frp) 相近，在高并发
 关于测试进行的更多细节，参见单独页面 [Benchmark](./docs/benchmark.md)。
 
 **但是，不要从这里得出结论，`chagle` 能让内网转发出来的服务快上数倍。** Benchmark 是在本地回环上进行的，其结果说明了任务受 CPU 限制时的结果。当用户的网络不是瓶颈时，用户能得到很大的提升。但是，对很多用户来说并不是这样。在这种情况下，`chagle` 能带来的主要好处是更少的资源占用，而带宽和延迟不一定有显著的改善。
-
-## Development Status
-
-`chagle` 正在积极开发中
-
-- [x] 支持 TLS
-- [x] 支持 UDP
-- [x] 热重载
-- [ ] 用于配置的 HTTP APIs
 
 [Out of Scope](./docs/out-of-scope.md) 列举了没有计划开发的特性并说明了原因。

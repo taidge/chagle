@@ -1,10 +1,7 @@
 # chagle
 
-[![GitHub stars](https://img.shields.io/github/stars/rapiz1/chagle)](https://github.com/rapiz1/chagle/stargazers)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/rapiz1/chagle)](https://github.com/rapiz1/chagle/releases)
-![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/rapiz1/chagle/rust.yml?branch=main)
-[![GitHub all releases](https://img.shields.io/github/downloads/rapiz1/chagle/total)](https://github.com/rapiz1/chagle/releases)
-[![Docker Pulls](https://img.shields.io/docker/pulls/rapiz1/chagle)](https://hub.docker.com/r/rapiz1/chagle)
+> An AI-maintained fork of [rathole](https://github.com/rathole-org/rathole), with extended features including HTTP/HTTPS virtual host proxy, secret proxies, health checks, load balancing, dashboard, plugin system, and more.
+
 [English](README.md) | [简体中文](README-zh.md)
 
 A secure, stable and high-performance reverse proxy for NAT traversal, written in Rust
@@ -20,7 +17,6 @@ chagle, like [frp](https://github.com/fatedier/frp) and [ngrok](https://github.c
     - [Logging](#logging)
     - [Tuning](#tuning)
   - [Benchmark](#benchmark)
-  - [Planning](#planning)
 
 <!-- /TOC -->
 
@@ -29,7 +25,15 @@ chagle, like [frp](https://github.com/fatedier/frp) and [ngrok](https://github.c
 - **High Performance** Much higher throughput can be achieved than frp, and more stable when handling a large volume of connections. See [Benchmark](#benchmark)
 - **Low Resource Consumption** Consumes much fewer memory than similar tools. See [Benchmark](#benchmark). [The binary can be](docs/build-guide.md) **as small as ~500KiB** to fit the constraints of devices, like embedded devices as routers.
 - **Security** Tokens of services are mandatory and service-wise. The server and clients are responsible for their own configs. With the optional Noise Protocol, encryption can be configured at ease. No need to create a self-signed certificate! TLS is also supported.
-- **Hot Reload** Services can be added or removed dynamically by hot-reloading the configuration file. HTTP API is WIP.
+- **Hot Reload** Services can be added or removed dynamically by hot-reloading the configuration file.
+- **HTTP/HTTPS Virtual Host** Route HTTP requests by domain, subdomain, and URL path. Supports host header rewrite, X-Forwarded-For injection, and HTTP basic auth.
+- **Secret Proxies (STCP/SUDP/XTCP)** Private access to services with secret key authentication and visitor-based connectivity.
+- **Health Checks & Load Balancing** TCP and HTTP health checks with configurable intervals. Group-based round-robin load balancing across proxies.
+- **Dashboard & Monitoring** Built-in web dashboard, REST API (`/api/status`), and Prometheus metrics export (`/metrics`).
+- **Plugin System** Client-side plugins (http_proxy, socks5, static_file, http2https, https2http, tls2raw, unix_domain_socket) and server-side HTTP RPC plugins.
+- **Bandwidth Limiting** Per-proxy bandwidth limits with token bucket rate control.
+- **Proxy Protocol** v1 and v2 support for passing real client IP to backend services.
+- **Multiple Config Formats** TOML, YAML, and JSON configuration files.
 
 ## Quickstart
 
@@ -197,9 +201,5 @@ chagle has similar latency to [frp](https://github.com/fatedier/frp), but can ha
 For more details, see the separate page [Benchmark](./docs/benchmark.md).
 
 **However, don't take it from here that `chagle` can magically make your forwarded service faster several times than before.** The benchmark is done on local loopback, indicating the performance when the task is cpu-bounded. One can gain quite a improvement if the network is not the bottleneck. Unfortunately, that's not true for many users. In that case, the main benefit is lower resource consumption, while the bandwidth and the latency may not improved significantly.
-
-## Planning
-
-- [ ] HTTP APIs for configuration
 
 [Out of Scope](./docs/out-of-scope.md) lists features that are not planned to be implemented and why.

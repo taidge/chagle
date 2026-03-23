@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::Result;
 use tokio::net::TcpStream;
 
@@ -328,7 +329,7 @@ impl ServerPlugin {
 
     /// Call the plugin's HTTP endpoint
     pub async fn call(&self, op: &str, content: &serde_json::Value) -> Result<PluginResponse> {
-        let url = format!("http://{}{}", self.addr, self.path);
+        let _url = format!("http://{}{}", self.addr, self.path);
 
         let body = serde_json::json!({
             "version": "0.1.0",

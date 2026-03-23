@@ -746,14 +746,15 @@ impl Config {
             }
 
             // Validate HTTP/HTTPS services
-            if matches!(s.service_type, ServiceType::Http | ServiceType::Https) {
-                if s.custom_domains.is_none() && s.subdomain.is_none() {
-                    bail!(
-                        "Service {} of type {:?} requires `custom_domains` or `subdomain`",
-                        name,
-                        s.service_type
-                    );
-                }
+            if matches!(s.service_type, ServiceType::Http | ServiceType::Https)
+                && s.custom_domains.is_none()
+                && s.subdomain.is_none()
+            {
+                bail!(
+                    "Service {} of type {:?} requires `custom_domains` or `subdomain`",
+                    name,
+                    s.service_type
+                );
             }
 
             // Validate STCP/SUDP/XTCP services
@@ -770,19 +771,16 @@ impl Config {
             }
 
             // Validate port restrictions
-            if let Some(allow_ports) = &server.allow_ports {
-                if s.needs_bind_addr() && !s.bind_addr.is_empty() {
-                    if let Ok(port) = s.bind_addr.rsplit(':').next().unwrap_or("0").parse::<u16>() {
-                        if port > 0 && !allow_ports.iter().any(|r| r.contains(port)) {
+            if let Some(allow_ports) = &server.allow_ports
+                && s.needs_bind_addr() && !s.bind_addr.is_empty()
+                    && let Ok(port) = s.bind_addr.rsplit(':').next().unwrap_or("0").parse::<u16>()
+                        && port > 0 && !allow_ports.iter().any(|r| r.contains(port)) {
                             bail!(
                                 "Service {} uses port {} which is not in allow_ports",
                                 name,
                                 port
                             );
                         }
-                    }
-                }
-            }
 
             // Validate health check
             if let Some(hc) = &s.health_check {
@@ -806,15 +804,14 @@ impl Config {
             }
 
             // Validate proxy_protocol_version
-            if let Some(ppv) = &s.proxy_protocol_version {
-                if ppv != "v1" && ppv != "v2" {
+            if let Some(ppv) = &s.proxy_protocol_version
+                && ppv != "v1" && ppv != "v2" {
                     bail!(
                         "Service {} proxy_protocol_version must be 'v1' or 'v2', got '{}'",
                         name,
                         ppv
                     );
                 }
-            }
         }
 
         Config::validate_transport_config(&server.transport, true)?;
@@ -850,11 +847,10 @@ impl Config {
             }
 
             // Apply start filter
-            if let Some(start) = start_filter {
-                if !start.contains(name) {
+            if let Some(start) = start_filter
+                && !start.contains(name) {
                     continue;
                 }
-            }
 
             // Token handling
             if s.token.is_none() {
@@ -874,11 +870,10 @@ impl Config {
             }
 
             // Apply global prefer_ipv6
-            if let Some(prefer_ipv6) = client.prefer_ipv6 {
-                if !s.prefer_ipv6 {
+            if let Some(prefer_ipv6) = client.prefer_ipv6
+                && !s.prefer_ipv6 {
                     s.prefer_ipv6 = prefer_ipv6;
                 }
-            }
 
             // Validate visitor services
             if s.is_visitor() {
@@ -1016,12 +1011,12 @@ pub fn parse_bandwidth_limit(s: &str) -> Result<u64> {
     if s.is_empty() {
         return Ok(0);
     }
-    let (num_str, unit) = if s.ends_with("MB") {
-        (&s[..s.len() - 2], 1024u64 * 1024)
-    } else if s.ends_with("KB") {
-        (&s[..s.len() - 2], 1024u64)
-    } else if s.ends_with("B") {
-        (&s[..s.len() - 1], 1u64)
+    let (num_str, unit) = if let Some(n) = s.strip_suffix("MB") {
+        (n, 1024u64 * 1024)
+    } else if let Some(n) = s.strip_suffix("KB") {
+        (n, 1024u64)
+    } else if let Some(n) = s.strip_suffix("B") {
+        (n, 1u64)
     } else {
         bail!("Invalid bandwidth unit. Use MB, KB, or B");
     };

@@ -17,6 +17,7 @@ pub const CURRENT_PROTO_VERSION: ProtocolVersion = PROTO_V1;
 pub type Digest = [u8; HASH_WIDTH_IN_BYTES];
 
 #[derive(Deserialize, Serialize, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum Hello {
     ControlChannelHello(ProtocolVersion, Digest), // sha256sum(service name) or a nonce
     DataChannelHello(ProtocolVersion, Digest),    // token provided by CreateDataChannel
@@ -58,6 +59,7 @@ pub enum ControlChannelCmd {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum DataChannelCmd {
     StartForwardTcp,
     StartForwardUdp,

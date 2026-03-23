@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -235,7 +236,7 @@ pub fn rewrite_request(info: &HttpRequestInfo, route: &HttpRoute, client_addr: &
     let mut output = format!("{} {} {}\r\n", info.method, info.path, info.version);
 
     // Add/modify headers
-    let mut host_written = false;
+    let mut _host_written = false;
     let mut xff_written = false;
 
     for (name, value) in &info.headers {
@@ -251,7 +252,7 @@ pub fn rewrite_request(info: &HttpRequestInfo, route: &HttpRoute, client_addr: &
             } else {
                 output.push_str(&format!("Host: {}\r\n", value));
             }
-            host_written = true;
+            _host_written = true;
         } else if name.eq_ignore_ascii_case("X-Forwarded-For") {
             output.push_str(&format!("X-Forwarded-For: {}, {}\r\n", value, client_addr));
             xff_written = true;
@@ -311,14 +312,12 @@ pub async fn read_http_header<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Ve
 /// HTTP Basic Auth validation
 pub fn validate_basic_auth(headers: &[(String, String)], user: &str, password: &str) -> bool {
     for (name, value) in headers {
-        if name.eq_ignore_ascii_case("Authorization") {
-            if let Some(encoded) = value.strip_prefix("Basic ") {
-                if let Ok(decoded) = base64_decode(encoded.trim()) {
+        if name.eq_ignore_ascii_case("Authorization")
+            && let Some(encoded) = value.strip_prefix("Basic ")
+                && let Ok(decoded) = base64_decode(encoded.trim()) {
                     let expected = format!("{}:{}", user, password);
                     return decoded == expected;
                 }
-            }
-        }
     }
     false
 }

@@ -11,6 +11,7 @@ use tracing::{error, info, instrument};
 use notify::{EventKind, RecursiveMode, Watcher};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum ConfigChange {
     General(Box<Config>), // Trigger a full restart
     ServerChange(ServerServiceChange),
@@ -19,13 +20,13 @@ pub enum ConfigChange {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ClientServiceChange {
-    Add(ClientServiceConfig),
+    Add(Box<ClientServiceConfig>),
     Delete(String),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ServerServiceChange {
-    Add(ServerServiceConfig),
+    Add(Box<ServerServiceConfig>),
     Delete(String),
 }
 
@@ -56,7 +57,7 @@ impl InstanceConfig for ServerConfig {
         ConfigChange::ServerChange(ServerServiceChange::Delete(s))
     }
     fn service_add_change(cfg: Self::ServiceConfig) -> ConfigChange {
-        ConfigChange::ServerChange(ServerServiceChange::Add(cfg))
+        ConfigChange::ServerChange(ServerServiceChange::Add(Box::new(cfg)))
     }
     fn get_services(&self) -> &HashMap<String, Self::ServiceConfig> {
         &self.services
@@ -82,7 +83,7 @@ impl InstanceConfig for ClientConfig {
         ConfigChange::ClientChange(ClientServiceChange::Delete(s))
     }
     fn service_add_change(cfg: Self::ServiceConfig) -> ConfigChange {
-        ConfigChange::ClientChange(ClientServiceChange::Add(cfg))
+        ConfigChange::ClientChange(ClientServiceChange::Add(Box::new(cfg)))
     }
     fn get_services(&self) -> &HashMap<String, Self::ServiceConfig> {
         &self.services
@@ -360,24 +361,24 @@ mod test {
             vec![ConfigChange::General(Box::new(tests[0].new.clone()))],
             vec![ConfigChange::General(Box::new(tests[1].new.clone()))],
             vec![ConfigChange::ServerChange(ServerServiceChange::Add(
-                Default::default(),
+                Box::default(),
             ))],
             vec![ConfigChange::ServerChange(ServerServiceChange::Delete(
                 String::from("foo"),
             ))],
             vec![
                 ConfigChange::ServerChange(ServerServiceChange::Delete(String::from("foo1"))),
-                ConfigChange::ServerChange(ServerServiceChange::Add(
+                ConfigChange::ServerChange(ServerServiceChange::Add(Box::new(
                     tests[4].new.server.as_ref().unwrap().services["bar1"].clone(),
-                )),
+                ))),
                 ConfigChange::ClientChange(ClientServiceChange::Delete(String::from("foo1"))),
                 ConfigChange::ClientChange(ClientServiceChange::Delete(String::from("foo2"))),
-                ConfigChange::ClientChange(ClientServiceChange::Add(
+                ConfigChange::ClientChange(ClientServiceChange::Add(Box::new(
                     tests[4].new.client.as_ref().unwrap().services["bar1"].clone(),
-                )),
-                ConfigChange::ClientChange(ClientServiceChange::Add(
+                ))),
+                ConfigChange::ClientChange(ClientServiceChange::Add(Box::new(
                     tests[4].new.client.as_ref().unwrap().services["bar2"].clone(),
-                )),
+                ))),
             ],
         ];
 

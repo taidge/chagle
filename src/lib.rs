@@ -105,8 +105,8 @@ pub async fn verify_config(args: &Cli) -> Result<()> {
 }
 
 pub async fn run(args: Cli, shutdown_rx: broadcast::Receiver<bool>) -> Result<()> {
-    if args.genkey.is_some() {
-        return genkey(args.genkey.unwrap());
+    if let Some(curve) = args.genkey {
+        return genkey(curve);
     }
 
     if args.verify {
@@ -114,7 +114,7 @@ pub async fn run(args: Cli, shutdown_rx: broadcast::Receiver<bool>) -> Result<()
     }
 
     // Raise `nofile` limit on linux and mac
-    fdlimit::raise_fd_limit();
+    let _ = fdlimit::raise_fd_limit();
 
     // Spawn a config watcher. The watcher will send a initial signal to start the instance with a config
     let config_path = args.config_path.as_ref().unwrap();

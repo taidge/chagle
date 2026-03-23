@@ -306,7 +306,7 @@ impl<T: 'static + Transport> Server<T> {
                     }
 
                     let mut wg = self.services.write().await;
-                    let _ = wg.insert(hash, cfg);
+                    let _ = wg.insert(hash, *cfg);
                     let mut wg = self.control_channels.write().await;
                     let _ = wg.remove1(&hash);
                 }
@@ -974,12 +974,11 @@ async fn run_http_vhost_listener<T: 'static + Transport>(
                             match route {
                                 Some(route) => {
                                     // Check HTTP basic auth if configured
-                                    if let (Some(user), Some(pass)) = (&route.http_user, &route.http_password) {
-                                        if !http_proxy::validate_basic_auth(&request_info.headers, user, pass) {
+                                    if let (Some(user), Some(pass)) = (&route.http_user, &route.http_password)
+                                        && !http_proxy::validate_basic_auth(&request_info.headers, user, pass) {
                                             let _ = http_proxy::send_401(&mut stream).await;
                                             return;
                                         }
-                                    }
 
                                     let service_name = route.service_name.clone();
                                     let service_digest = protocol::digest(service_name.as_bytes());

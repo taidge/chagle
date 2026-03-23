@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::Result;
 use std::net::SocketAddr;
 use tokio::io::{AsyncWrite, AsyncWriteExt};

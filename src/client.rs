@@ -114,12 +114,11 @@ impl<T: 'static + Transport> Client<T> {
             }
 
             // Apply start filter
-            if let Some(start) = start_filter {
-                if !start.contains(name) {
+            if let Some(start) = start_filter
+                && !start.contains(name) {
                     debug!("Service {} not in start list, skipping", name);
                     continue;
                 }
-            }
 
             // Skip visitor services (they don't create control channels)
             if config.is_visitor() {
@@ -178,7 +177,7 @@ impl<T: 'static + Transport> Client<T> {
                     }
                     let name = cfg.name.clone();
                     let handle = ControlChannelHandle::new(
-                        cfg,
+                        *cfg,
                         self.config.remote_addr.clone(),
                         self.transport.clone(),
                         self.config.heartbeat_timeout,
